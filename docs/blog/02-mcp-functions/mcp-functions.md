@@ -69,7 +69,9 @@ The new Azure Functions support means you can take your existing Node.js MCP ser
 
 ## 3 simple steps to enable Functions hosting
 
-Let's break down what you need to add to your existing Node.js MCP server to run it on Azure Functions. I'll use a real-world example from our burger ordering system.
+Let's break down what you need to add to your existing Node.js MCP server to run it on Azure Functions. I'll use a [real-world example](https://github.com/Azure-Samples/mcp-agent-langchainjs/tree/main/packages/burger-mcp) from our burger ordering system.
+
+If you already have a working Node.js MCP server, you can just follow these three steps to make it compatible with Azure Functions hosting.
 
 ### Step 1: Add the `host.json` configuration
 
@@ -87,7 +89,6 @@ Create a `host.json` file at the root of your Node.js project:
     "description": {
       "defaultExecutablePath": "node",
       "workingDirectory": "",
-      // Change this to your compiled server entry point if needed
       "arguments": ["lib/server.js"]
     },
     "enableForwardingHttpRequest": true,
@@ -95,6 +96,8 @@ Create a `host.json` file at the root of your Node.js project:
   }
 }
 ```
+
+> **Note:** Adjust the `arguments` array to point to your compiled server file (e.g., `lib/server.js` or `dist/server.js`), depending on your build setup.
 
 This configures the Azure Functions runtime to run your Node.js MCP server as a *custom handler*, which allows you to use any HTTP server framework (like Express, Fastify, etc.) without modification (**tip: it can do more than MCP servers!** 😉).
 
@@ -138,7 +141,7 @@ Create a `handler` directory with a `function.json` file and add the following c
 }
 ```
 
-This file tells Azure Functions to route *all** HTTP requests to your MCP server. No configuration needed here, and this boilerplate file might even not be necessary in future versions.
+This file tells Azure Functions to route **all** HTTP requests to your MCP server. No configuration needed here, and this boilerplate file might even not be necessary in future versions.
 
 Aaand you're done with the configuration. That's it! 😎
 
@@ -167,7 +170,7 @@ Let's look at how this works in practice with a [burger ordering MCP server](htt
 Here's the complete server implementation using Express and the MCP SDK:
 
 ```typescript
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getMcpServer } from './mcp.js';
 
@@ -239,13 +242,13 @@ As you can see, the actual implementation of the tool is forwarding an HTTP requ
 
 ### Current limitations
 
-Note that this Azure Functions MCP hosting currently have some limitations: **it only supports stateless servers using the HTTP Streaming protocol**. The legacy SSE protocol is not supported as it requires stateful connections, so you'll either have to migrate your client to use HTTP Streaming or use another hosting option, like using containers for example.
+Note that this Azure Functions MCP hosting currently has some limitations: **it only supports stateless servers using the HTTP Streaming protocol**. The legacy SSE protocol is not supported as it requires stateful connections, so you'll either have to migrate your client to use HTTP Streaming or use another hosting option, like using containers for example.
 
 For most use cases, HTTP Streaming is the recommended approach anyway as it's more scalable and doesn't require persistent connections. Stateful MCP servers comes with additional complexity challenges and have limited scalability if you need to handle many concurrent connections.
 
 ## Testing the MCP server locally
 
-First let's run the MCP server locally and play a bit with it locally.
+First let's run the MCP server locally and play a bit with it.
 
 If you don't want to bother with setting up a local environment, you can use the following link or open it in a new tab to launch a GitHub Codespace:
 
@@ -253,7 +256,7 @@ If you don't want to bother with setting up a local environment, you can use the
 
 This will open a VS Code environment in your browser with the repo already cloned and all the tools installed and ready to go. Otherwise you can just [clone the repo](https://github.com/Azure-Samples/mcp-agent-langchainjs).
 
-Once you have the code ready, open a terminal an run:
+Once you have the code ready, open a terminal and run:
 
 ```sh
 # Install dependencies
@@ -361,7 +364,7 @@ The burger MCP server is actually part of a larger example project that demonstr
 - Live order visualization
 - Complete Infrastructure as Code, to deploy everything with one command
 
-But if you're only interested in the MCP server part, then you might be want to look at this simpler example that you can use as a starting point for your own MCP servers: [mcp-sdk-functions-hosting-node](https://github.com/Azure-Samples/mcp-sdk-functions-hosting-node) is a server template for a Node.js MCP server using TypeScript and MCP SDK.
+But if you're only interested in the MCP server part, then you might want to look at this simpler example that you can use as a starting point for your own MCP servers: [mcp-sdk-functions-hosting-node](https://github.com/Azure-Samples/mcp-sdk-functions-hosting-node) is a server template for a Node.js MCP server using TypeScript and MCP SDK.
 
 ## What about the cost?
 
