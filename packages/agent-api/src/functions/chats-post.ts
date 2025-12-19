@@ -2,14 +2,15 @@ import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import { HttpRequest, InvocationContext, HttpResponseInit, app } from '@azure/functions';
 import { createAgent, AIMessage, HumanMessage } from 'langchain';
-import { ChatOpenAI } from '@langchain/openai';
 import { AzureCosmsosDBNoSQLChatMessageHistory } from '@langchain/azure-cosmosdb';
 import { loadMcpTools } from '@langchain/mcp-adapters';
 import { StreamEvent } from '@langchain/core/tracers/log_stream';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { getAzureOpenAiTokenProvider, getCredentials, getInternalUserId } from '../auth.js';
+import { getCredentials, getInternalUserId } from '../auth.js';
 import { type AIChatCompletionRequest, type AIChatCompletionDelta } from '../models.js';
+import { createModel } from '../model-factory.js';
+import { createChatHistory as createInMemoryChatHistory } from '../in-memory-history.js';
 
 const agentSystemPrompt = `## Role
 You an expert assistant that helps users with managing burger orders. Use the provided tools to get the information you need and perform actions on behalf of the user.
@@ -42,7 +43,6 @@ Make sure the last question ends with ">>", and phrase the questions as if you w
 const titleSystemPrompt = `Create a title for this chat session, based on the user question. The title should be less than 32 characters. Do NOT use double-quotes. The title should be concise, descriptive, and catchy. Respond with only the title, no other text.`;
 
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-  const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
 
   try {
@@ -71,8 +71,10 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const sessionId = ((chatContext as any)?.sessionId as string) || randomUUID();
     context.log(`userId: ${userId}, sessionId: ${sessionId}`);
 
-    if (!azureOpenAiEndpoint || !burgerMcpUrl) {
-      const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT or BURGER_MCP_URL';
+    const model = createModel(context);
+    if (!model) {
+      const errorMessage =
+        'Missing required environment variables. Set either AZURE_OPENAI_API_ENDPOINT for Azure OpenAI, or GITHUB_TOKEN for GitHub Models.';
       context.error(errorMessage);
       return {
         status: 500,
@@ -82,20 +84,27 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       };
     }
 
-    const model = new ChatOpenAI({
-      configuration: { baseURL: azureOpenAiEndpoint },
-      modelName: process.env.AZURE_OPENAI_MODEL ?? 'gpt-5-mini',
-      streaming: true,
-      useResponsesApi: true,
-      apiKey: getAzureOpenAiTokenProvider(),
-    });
-    const chatHistory = new AzureCosmsosDBNoSQLChatMessageHistory({
-      sessionId,
-      userId,
-      credentials: getCredentials(),
-      containerName: 'history',
-      databaseName: 'historyDB',
-    });
+    if (!burgerMcpUrl) {
+      const errorMessage = 'Missing required environment variable: BURGER_MCP_URL';
+      context.error(errorMessage);
+      return {
+        status: 500,
+        jsonBody: {
+          error: errorMessage,
+        },
+      };
+    }
+
+    const cosmosDbEndpoint = process.env.AZURE_COSMOSDB_NOSQL_ENDPOINT;
+    const chatHistory = cosmosDbEndpoint
+      ? new AzureCosmsosDBNoSQLChatMessageHistory({
+        sessionId,
+        userId,
+        credentials: getCredentials(),
+        containerName: 'history',
+        databaseName: 'historyDB',
+      })
+      : createInMemoryChatHistory({ sessionId, userId });
 
     const client = new Client({
       name: 'burger-mcp-client',

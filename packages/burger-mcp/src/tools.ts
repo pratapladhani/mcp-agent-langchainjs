@@ -4,16 +4,16 @@ import { burgerApiUrl } from './config.js';
 export const tools = [
   {
     name: 'get_burgers',
-    description: 'Get a list of all burgers in the menu',
+    description: 'Get a list of all burgers in the menu. Returns burger objects with numeric IDs (use the id field when placing orders, not the name).',
     async handler() {
       return fetchBurgerApi('/api/burgers');
     },
   },
   {
     name: 'get_burger_by_id',
-    description: 'Get a specific burger by its ID',
+    description: 'Get a specific burger by its numeric ID',
     schema: z.object({
-      id: z.string().describe('ID of the burger to retrieve'),
+      id: z.string().describe('Numeric ID of the burger to retrieve (e.g., "1", "2", "6")'),
     }),
     async handler(args: z.ZodRawShape) {
       return fetchBurgerApi(`/api/burgers/${args.id}`);
@@ -76,16 +76,16 @@ export const tools = [
   },
   {
     name: 'place_order',
-    description: 'Place a new order with burgers (requires userId)',
+    description: 'Place a new order with burgers (requires userId). IMPORTANT: Use the numeric burger ID from get_burgers (e.g., "1", "2", "6"), NOT the burger name.',
     schema: z.object({
       userId: z.string().describe('ID of the user placing the order'),
       nickname: z.string().optional().describe('Optional nickname for the order (only first 10 chars displayed)'),
       items: z
         .array(
           z.object({
-            burgerId: z.string().describe('ID of the burger'),
+            burgerId: z.string().describe('Numeric ID of the burger from the menu (e.g., "1", "2", "6"), NOT the burger name'),
             quantity: z.number().min(1).describe('Quantity of the burger'),
-            extraToppingIds: z.array(z.string()).describe('List of extra topping IDs'),
+            extraToppingIds: z.array(z.string()).describe('List of extra topping IDs (numeric IDs like "1", "2", etc.)'),
           }),
         )
         .nonempty()
